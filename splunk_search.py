@@ -72,7 +72,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, required=True, help="Splunk port")
     parser.add_argument("--username", required=True, help="Splunk username")
     parser.add_argument("--password", required=True, help="Splunk password")
-    parser.add_argument("--query", required=True, help="Splunk query string")
+    parser.add_argument("--query", nargs='+', required=True, help="Splunk query string. Wrap arguments with spaces in quotes, e.g., 'index=main user=\"test user\"'.")
     parser.add_argument("--output_file", required=True, help="Output CSV filename")
     parser.add_argument("--earliest_time_str", required=True, help="Earliest time for query (YYYY-MM-DD HH:MM:SS)")
     parser.add_argument("--latest_time_str", required=True, help="Latest time for query (YYYY-MM-DD HH:MM:SS)")
@@ -86,13 +86,11 @@ if __name__ == "__main__":
         print("Error: Please provide earliest and latest times in 'YYYY-MM-DD HH:MM:SS' format.")
         sys.exit(1)
     
-    # Use shlex to parse the query string, allowing spaces within quoted arguments
-    parsed_query_args = shlex.split(args.query)
-    
-    # Reconstruct the query string from the parsed arguments
-    # This might need refinement based on how the Splunk API expects the query
-    # For now, joining them back with spaces
-    reconstructed_query = " ".join(parsed_query_args)
+    # Join all parts of the query argument and then use shlex to parse it
+    # This allows for more flexible command-line input where the user might not quote the entire query
+    full_query_string = " ".join(args.query)
+    parsed_query_parts = shlex.split(full_query_string)
+    reconstructed_query = " ".join(parsed_query_parts)
 
     searcher = SplunkSearcher(args.host, args.port, args.username, args.password)
     searcher.run_query_in_chunks(reconstructed_query, args.output_file, earliest_time, latest_time)
