@@ -2,6 +2,8 @@ import splunklib.client as client
 import splunklib.results as results
 import csv
 import sys
+import argparse
+import shlex
 from datetime import datetime, timedelta
 from tqdm import tqdm
 
@@ -65,28 +67,32 @@ class SplunkSearcher:
                 print(f"Results written to {output_filename}")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 9:
-        print("Usage: python splunk_search.py <host> <port> <username> <password> <query> <output_file> <earliest_time_str> <latest_time_str>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Run Splunk queries in chunks.")
+    parser.add_argument("--host", required=True, help="Splunk host")
+    parser.add_argument("--port", type=int, required=True, help="Splunk port")
+    parser.add_argument("--username", required=True, help="Splunk username")
+    parser.add_argument("--password", required=True, help="Splunk password")
+    parser.add_argument("--query", required=True, help="Splunk query string")
+    parser.add_argument("--output_file", required=True, help="Output CSV filename")
+    parser.add_argument("--earliest_time_str", required=True, help="Earliest time for query (YYYY-MM-DD HH:MM:SS)")
+    parser.add_argument("--latest_time_str", required=True, help="Latest time for query (YYYY-MM-DD HH:MM:SS)")
 
-    host = sys.argv[1]
-    port = int(sys.argv[2])
-    username = sys.argv[3]
-    password = sys.argv[4]
-    query = sys.argv[5]
-    output_file = sys.argv[6]
-    
+    args = parser.parse_args()
+
     try:
-        earliest_time_str = sys.argv[7]
-        latest_time_str = sys.argv[8]
-        
-        # This will convert the string to datetime object
-        earliest_time = datetime.strptime(earliest_time_str, '%Y-%m-%d %H:%M:%S')
-        latest_time = datetime.strptime(latest_time_str, '%Y-%m-%d %H:%M:%S')
-        
+        earliest_time = datetime.strptime(args.earliest_time_str, '%Y-%m-%d %H:%M:%S')
+        latest_time = datetime.strptime(args.latest_time_str, '%Y-%m-%d %H:%M:%S')
     except ValueError:
         print("Error: Please provide earliest and latest times in 'YYYY-MM-DD HH:MM:SS' format.")
         sys.exit(1)
+    
+    # Use shlex to parse the query string, allowing spaces within quoted arguments
+    parsed_query_args = shlex.split(args.query)
+    
+    # Reconstruct the query string from the parsed arguments
+    # This might need refinement based on how the Splunk API expects the query
+    # For now, joining them back with spaces
+    reconstructed_query = " ".join(parsed_query_args)
 
-    searcher = SplunkSearcher(host, port, username, password)
-    searcher.run_query_in_chunks(query, output_file, earliest_time, latest_time)
+    searcher = SplunkSearcher(args.host, args.port, args.username, args.password)
+    searcher.run_query_in_chunks(reconstructed_query, args.output_file, earliest_time, latest_time)
