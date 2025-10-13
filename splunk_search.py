@@ -33,7 +33,7 @@ class SplunkSearcher:
                     chunk_query = f"{query} earliest={current_earliest.strftime('%Y-%m-%dT%H:%M:%S')} latest={current_latest.strftime('%Y-%m-%dT%H:%M:%S')}"
                     print(f"Running chunk query: {chunk_query}")
 
-                    job = self.service.jobs.create(chunk_query, **{"exec_mode": "blocking"})
+                    job = self.service.jobs.create(chunk_query, **{"exec_mode": "blocking", "count": 0})
 
                     reader = results.ResultsReader(job.results())
                     
