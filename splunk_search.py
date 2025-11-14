@@ -11,7 +11,7 @@ class SplunkSearcher:
     def __init__(self, host, port, username, password):
         self.service = client.connect(host=host, port=port, username=username, password=password)
 
-    def run_query_in_chunks(self, query, output_filename, earliest_time, latest_time, chunk_size_days=30):
+    def run_query_in_chunks(self, query, output_filename, earliest_time, latest_time, chunk_size_days=7):
         total_days = (latest_time - earliest_time).days
         
         # Initialize the progress bar with the total estimated number of chunks and total_days
@@ -28,16 +28,23 @@ class SplunkSearcher:
 
                 while current_earliest < latest_time:
                     current_latest = min(current_earliest + timedelta(days=chunk_size_days), latest_time)
+                    query_parts = query.split("|")
+                    if len(query_parts) == 1:
+                        chunk_query = f"{query} earliest={current_earliest.strftime('%m/%d/%Y:%H:%M:%S')} latest={current_latest.strftime('%m/%d/%Y:%H:%M:%S')}"
+                        # Construct the chunked query
+                        chunk_query = f"{query} earliest={current_earliest.strftime('%m/%d/%Y:%H:%M:%S')} latest={current_latest.strftime('%m/%d/%Y:%H:%M:%S')}"
+                    else:
+                        for i, j in enumerate(query_parts[1:]):
+                            query_parts[i+1] = j.replace("search", f"search earliest={current_earliest.strftime('%m/%d/%Y:%H:%M:%S')} latest={current_latest.strftime('%m/%d/%Y:%H:%M:%S')}")
+                        chunk_query = f"{query_parts[0]} earliest={current_earliest.strftime('%m/%d/%Y:%H:%M:%S')} latest={current_latest.strftime('%m/%d/%Y:%H:%M:%S')} {"|" + query_parts[1] if len(query_parts) == 2 else "| " + "|".join(query_parts[1:])}"
+                        # Construct the chunked query
+                        chunk_query = f"{query_parts[0]} earliest={current_earliest.strftime('%m/%d/%Y:%H:%M:%S')} latest={current_latest.strftime('%m/%d/%Y:%H:%M:%S')} {"|" + query_parts[1] if len(query_parts) == 2 else "| " + "|".join(query_parts[1:])}"
+                    #print(f"Running chunk query: {chunk_query}")
 
-                    # Construct the chunked query
-                    chunk_query = f"{query} earliest={current_earliest.strftime('%Y-%m-%dT%H:%M:%S')} latest={current_latest.strftime('%Y-%m-%dT%H:%M:%S')}"
-                    print(f"Running chunk query: {chunk_query}")
-
-                    job = self.service.jobs.create(chunk_query, **{"exec_mode": "blocking", "count": 0})
-
-                    reader = results.ResultsReader(job.results())
-                    
-                    
+                    job = self.service.jobs.create(chunk_query, **{"exec_mode": "blocking", "count":0})
+                    while not job.is_done():
+                        sys.sleep(2)
+                    reader = results.ResultsReader(job.results(count=0))
                     
                     # If csv_writer is not yet initialized (first chunk), extract fieldnames to write header
                     if csv_writer is None:
@@ -47,10 +54,10 @@ class SplunkSearcher:
                             fieldnames = list(first_result.keys())
                             csv_writer = csv.DictWriter(outfile, fieldnames=fieldnames)
                             csv_writer.writeheader()
-                            query_results.append(first_result) # Add the first result to the list
+                            csv_writer.writerow(first_result) # Add the first result to the list
                             
                             # Re-initialize reader to include first_result in subsequent iteration
-                            reader = results.ResultsReader(job.results())
+                            #reader = results.ResultsReader(job.results(count=0))
 
                     for result in reader:
                         if csv_writer is not None:
